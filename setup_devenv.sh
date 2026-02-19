@@ -3,12 +3,19 @@
 
 set -euo pipefail
 
-if [ -z "${HOME:-}" ] || [ ! -d "$HOME" ]; then
-  echo "HOME directory is not available: '${HOME:-}'" >&2
-  exit 1
+USER_HOME="${HOME:-}"
+
+if command -v getent >/dev/null 2>&1 && [ -n "${USER:-}" ]; then
+  PASSWD_HOME="$(getent passwd "$USER" | cut -d: -f6 || true)"
+  if [ -n "$PASSWD_HOME" ]; then
+    USER_HOME="$PASSWD_HOME"
+  fi
 fi
 
-USER_HOME="$HOME"
+if [ -z "$USER_HOME" ] || [ ! -d "$USER_HOME" ]; then
+  echo "Home directory is not available: '${USER_HOME:-}'" >&2
+  exit 1
+fi
 
 # Detect distro/package manager
 source /etc/os-release
@@ -156,7 +163,7 @@ fi
 TMUX_CONF="$USER_HOME/.tmux.conf"
 
 # Ensure target file can be created before heredoc write.
-if ! : > "$TMUX_CONF"; then
+if ! install -D -m 0644 /dev/null "$TMUX_CONF"; then
   echo "Warning: could not write $TMUX_CONF. Skipping tmux config + TPM setup." >&2
 else
 
