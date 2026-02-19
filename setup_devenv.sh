@@ -8,6 +8,8 @@ if [ -z "${HOME:-}" ] || [ ! -d "$HOME" ]; then
   exit 1
 fi
 
+USER_HOME="$HOME"
+
 # Detect distro/package manager
 source /etc/os-release
 PKG_MGR=""
@@ -145,16 +147,18 @@ fi
 # -----------------------------------------------------------------------------
 # Tmux config + TPM
 # -----------------------------------------------------------------------------
-mkdir -p "$HOME/.tmux/plugins"
+mkdir -p "$USER_HOME/.tmux/plugins"
 
-if [ ! -d "$HOME/.tmux/plugins/tpm" ]; then
-  git clone https://github.com/tmux-plugins/tpm "$HOME/.tmux/plugins/tpm"
+if [ ! -d "$USER_HOME/.tmux/plugins/tpm" ]; then
+  git clone https://github.com/tmux-plugins/tpm "$USER_HOME/.tmux/plugins/tpm"
 fi
 
-TMUX_CONF="$HOME/.tmux.conf"
+TMUX_CONF="$USER_HOME/.tmux.conf"
 
 # Ensure target file can be created before heredoc write.
-: > "$TMUX_CONF"
+if ! : > "$TMUX_CONF"; then
+  echo "Warning: could not write $TMUX_CONF. Skipping tmux config + TPM setup." >&2
+else
 
 cat > "$TMUX_CONF" <<'EOF'
 # Start windows and panes at 1, not 0
@@ -236,12 +240,13 @@ tmux new-session -d -s __tpm__ || true
 tmux source-file "$TMUX_CONF"
 
 # Install plugins (clones them into ~/.tmux/plugins)
-"$HOME/.tmux/plugins/tpm/bin/install_plugins" || true
+"$USER_HOME/.tmux/plugins/tpm/bin/install_plugins" || true
 
 # (Optional) Update plugins
 # ~/.tmux/plugins/tpm/bin/update_plugins all || true
 
 # Cleanup
 tmux kill-session -t __tpm__ 2>/dev/null || true
+fi
 
 echo "Done. Note: you may need to log out and back in for the fish login shell change to take effect."
