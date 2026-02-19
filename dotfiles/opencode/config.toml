@@ -1,8 +1,0 @@
-[ui]
-theme = "solarized"
-
-[editor]
-default = "nvim"
-
-[ssh]
-prefer_agent = true
