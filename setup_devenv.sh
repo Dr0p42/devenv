@@ -3,6 +3,11 @@
 
 set -euo pipefail
 
+if [ -z "${HOME:-}" ] || [ ! -d "$HOME" ]; then
+  echo "HOME directory is not available: '${HOME:-}'" >&2
+  exit 1
+fi
+
 # Detect distro/package manager
 source /etc/os-release
 PKG_MGR=""
@@ -99,13 +104,15 @@ EOF
 # -----------------------------------------------------------------------------
 # Install opencode
 # -----------------------------------------------------------------------------
-curl -fsSL https://opencode.ai/install | bash
+if ! curl -fsSL --retry 5 --retry-delay 2 --retry-connrefused https://opencode.ai/install | bash; then
+  echo "Warning: opencode install failed (could not fetch latest version). Continuing..." >&2
+fi
 
 # -----------------------------------------------------------------------------
 # Neovim (tarball install to /opt)
 # -----------------------------------------------------------------------------
 tmp_tar="$(mktemp -t nvim-linux-x86_64.XXXXXX.tar.gz)"
-curl -fL -o "$tmp_tar" https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz
+curl -fL --retry 5 --retry-delay 2 --retry-connrefused -o "$tmp_tar" https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz
 
 sudo rm -rf /opt/nvim-linux-x86_64
 sudo tar -C /opt -xzf "$tmp_tar"
@@ -138,11 +145,18 @@ fi
 # -----------------------------------------------------------------------------
 # Tmux config + TPM
 # -----------------------------------------------------------------------------
-if [ ! -d ~/.tmux/plugins/tpm ]; then
-  git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
+mkdir -p "$HOME/.tmux/plugins"
+
+if [ ! -d "$HOME/.tmux/plugins/tpm" ]; then
+  git clone https://github.com/tmux-plugins/tpm "$HOME/.tmux/plugins/tpm"
 fi
 
-cat > ~/.tmux.conf <<'EOF'
+TMUX_CONF="$HOME/.tmux.conf"
+
+# Ensure target file can be created before heredoc write.
+: > "$TMUX_CONF"
+
+cat > "$TMUX_CONF" <<'EOF'
 # Start windows and panes at 1, not 0
 set -g base-index 1
 setw -g pane-base-index 1
@@ -219,10 +233,10 @@ tmux start-server
 tmux new-session -d -s __tpm__ || true
 
 # Source the config (so TPM sees the @plugin lines)
-tmux source-file ~/.tmux.conf
+tmux source-file "$TMUX_CONF"
 
 # Install plugins (clones them into ~/.tmux/plugins)
-~/.tmux/plugins/tpm/bin/install_plugins || true
+"$HOME/.tmux/plugins/tpm/bin/install_plugins" || true
 
 # (Optional) Update plugins
 # ~/.tmux/plugins/tpm/bin/update_plugins all || true
