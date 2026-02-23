@@ -76,17 +76,24 @@ cat > ~/.config/fish/functions/stm.fish <<'EOF'
 function stm
     set -l session $argv[1]
     set -l cwd (pwd)
+    set -l session_from_dot 0
 
-    if test -z "$session"
+    if test "$session" = "."
+        set session (basename "$cwd")
+        set session_from_dot 1
+    else if test -z "$session"
         set session tasks
     end
 
-    if test "$session" = tasks
-        mkdir -p "$HOME/dev/tasks"
-        set cwd "$HOME/dev/tasks"
+    if test "$session" = tasks; and test "$session_from_dot" -eq 0
+        mkdir -p /Users/maximejublou/dev/tasks
+        set cwd /Users/maximejublou/dev/tasks
     end
 
+
     if tmux has-session -t "$session" 2>/dev/null
+        tmux set-option -t "$session" default-path "$cwd" >/dev/null 2>&1
+
         if set -q TMUX
             tmux switch-client -t "$session"
         else
@@ -96,6 +103,7 @@ function stm
     end
 
     tmux new-session -d -s "$session" -c "$cwd"
+    tmux set-option -t "$session" default-path "$cwd" >/dev/null 2>&1
     tmux new-window -t "$session:2" -c "$cwd"
     tmux send-keys -t "$session:2" opencode C-m
     tmux new-window -t "$session:3" -c "$cwd"
