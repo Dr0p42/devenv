@@ -34,7 +34,54 @@ fi
 # Dependencies
 # -----------------------------------------------------------------------------
 if [ "$PKG_MGR" = "dnf" ]; then
-  sudo dnf install -y curl git tmux fzf gcc gcc-c++ make cmake pkgconf-pkg-config ripgrep
+  sudo dnf install -y curl git tmux gcc gcc-c++ make cmake pkgconf-pkg-config
+
+  if ! sudo dnf install -y fzf; then
+    if ! command -v fzf >/dev/null 2>&1; then
+      if ! {
+        if [ ! -d "$USER_HOME/.fzf" ]; then
+          git clone --depth 1 https://github.com/junegunn/fzf.git "$USER_HOME/.fzf"
+        fi
+        "$USER_HOME/.fzf/install" --all
+      }; then
+        echo "Warning: could not install fzf from fallback source." >&2
+      fi
+    fi
+  fi
+
+  if ! sudo dnf install -y ripgrep; then
+    if ! command -v rg >/dev/null 2>&1; then
+      rg_version="14.1.1"
+      arch="$(uname -m)"
+
+      case "$arch" in
+        x86_64)
+          rg_target="x86_64-unknown-linux-musl"
+          ;;
+        aarch64)
+          rg_target="aarch64-unknown-linux-musl"
+          ;;
+        *)
+          echo "Warning: unsupported architecture '$arch' for ripgrep fallback install." >&2
+          rg_target=""
+          ;;
+      esac
+
+      if [ -n "$rg_target" ]; then
+        rg_archive="ripgrep-${rg_version}-${rg_target}.tar.gz"
+        rg_tmp_dir="$(mktemp -d -t ripgrep.XXXXXX)"
+
+        if ! {
+          curl -fL --retry 5 --retry-delay 2 --retry-connrefused -o "$rg_tmp_dir/$rg_archive" "https://github.com/BurntSushi/ripgrep/releases/download/${rg_version}/${rg_archive}"
+          tar -xzf "$rg_tmp_dir/$rg_archive" -C "$rg_tmp_dir"
+          sudo install -m 0755 "$rg_tmp_dir/ripgrep-${rg_version}-${rg_target}/rg" /usr/local/bin/rg
+        }; then
+          echo "Warning: could not install ripgrep from fallback source." >&2
+        fi
+        rm -rf "$rg_tmp_dir"
+      fi
+    fi
+  fi
 else
   sudo apt-get update
   sudo apt-get install -y curl git tmux fzf build-essential cmake pkg-config ripgrep
@@ -46,7 +93,8 @@ fi
 # Install EPEL only on RHEL-like 9 (Rocky/Alma/RHEL). Skip on Fedora.
 if [ "$PKG_MGR" = "dnf" ] && [ -f /etc/redhat-release ] && grep -qE 'Rocky|AlmaLinux|Red Hat' /etc/redhat-release; then
   if ! rpm -q epel-release >/dev/null 2>&1; then
-    sudo dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
+    epel_major="${VERSION_ID%%.*}"
+    sudo dnf install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${epel_major}.noarch.rpm"
   fi
 fi
 
